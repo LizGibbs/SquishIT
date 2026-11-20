@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# App runtime files (generated on each run)
+squishit_resume.json
+squishit_db.json
+squishit_settings.json
+temp/
+logs/
+
+# Tools binaries (too large for git — distribute separately)
+tools/ffmpeg.exe
+tools/ffprobe.exe
+tools/gs/
+
+# Temp files
+*.sqtmp
+*.sqtmp.*
+_gs_installer.exe
