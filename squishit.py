@@ -495,6 +495,7 @@ class SquishIt(tk.Tk):
         self._load_settings()
         self._cleanup_temp_dir()
         self.protocol('WM_DELETE_WINDOW', self._on_close)
+        self._ensure_ffmpeg()
         self._ensure_ghostscript()
         self._check_tools()
         self._load_resume()
@@ -848,6 +849,87 @@ class SquishIt(tk.Tk):
     # ------------------------------------------------------------------
     # UI helpers
     # ------------------------------------------------------------------
+
+    def _ensure_ffmpeg(self):
+        """Download FFmpeg into tools\ on first run if not found."""
+        global FFMPEG, FFPROBE
+        if FFMPEG:
+            return
+
+        answer = messagebox.askyesno(
+            'Download FFmpeg?',
+            'FFmpeg is needed for video compression.\n\n'
+            'Download it now (~75 MB) into the tools\\ folder?\n'
+            '(One-time download — stays portable with the app.)',
+            icon='question')
+        if not answer:
+            self._log('FFmpeg download skipped — video compression disabled.')
+            return
+
+        import urllib.request
+        import zipfile
+
+        _FF_URL = (
+            'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest'
+            '/ffmpeg-master-latest-win64-gpl.zip'
+        )
+        tmp_zip = os.path.join(_tools_dir(), '_ffmpeg_download.zip')
+        os.makedirs(_tools_dir(), exist_ok=True)
+
+        self._log('Downloading FFmpeg…')
+        self.update_idletasks()
+
+        try:
+            def _progress(count, block, total):
+                if total > 0:
+                    pct = min(count * block * 100 // total, 100)
+                    self.after(0, self._status_var.set,
+                               f'Downloading FFmpeg… {pct}%')
+                    self.after(0, self.update_idletasks)
+
+            urllib.request.urlretrieve(_FF_URL, tmp_zip, _progress)
+        except Exception as e:
+            self._log(f'FFmpeg download failed: {e}')
+            if os.path.exists(tmp_zip):
+                os.remove(tmp_zip)
+            return
+
+        self._log('Extracting ffmpeg.exe and ffprobe.exe…')
+        self.update_idletasks()
+
+        try:
+            with zipfile.ZipFile(tmp_zip, 'r') as zf:
+                for member in zf.namelist():
+                    name = os.path.basename(member)
+                    if name in ('ffmpeg.exe', 'ffprobe.exe') and '/bin/' in member:
+                        dest = os.path.join(_tools_dir(), name)
+                        with zf.open(member) as src_f, open(dest, 'wb') as dst_f:
+                            shutil.copyfileobj(src_f, dst_f)
+                        self._log(f'Extracted {name}')
+        except Exception as e:
+            self._log(f'FFmpeg extraction failed: {e}')
+            return
+        finally:
+            try:
+                os.remove(tmp_zip)
+            except OSError:
+                pass
+
+        FFMPEG  = find_tool('ffmpeg')
+        FFPROBE = find_tool('ffprobe')
+
+        if FFMPEG:
+            self._log(f'FFmpeg ready: {FFMPEG}')
+            self._status_var.set('FFmpeg installed.')
+            # Enable video checkbox now that FFmpeg is available
+            self.after(100, self._refresh_video_state)
+        else:
+            self._log('FFmpeg extracted but exe not found — check tools\\ folder.')
+
+    def _refresh_video_state(self):
+        """Re-enable video controls after FFmpeg downloads."""
+        if FFMPEG:
+            self.vid_enabled.set(True)
 
     def _ensure_ghostscript(self):
         """Download and extract portable Ghostscript on first run if not found."""
